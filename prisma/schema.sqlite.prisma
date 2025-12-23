@@ -1,0 +1,43 @@
+// SQLite Schema - Use this when running in offline mode
+// To use: Copy this file to schema.prisma or use environment variable to switch
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Copy all models from main schema.prisma here
+// For now, this is a placeholder - you'll need to copy the models
+
+model User {
+  id            String          @id @default(cuid())
+  username      String          @unique
+  email         String          @unique
+  password      String
+  name          String
+  profileImage  String?
+  role          UserRole        @default(CASHIER)
+  branchId      String?
+  companyId     String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     String?
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN
+  MANAGER
+  CASHIER
+}
+
+// Note: This is a minimal example
+// You need to copy all models from schema.prisma to this file
+// Or use a script to generate this dynamically

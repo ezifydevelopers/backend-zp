@@ -1,0 +1,620 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "darwin", "darwin-arm64", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  username      String          @unique
+  email         String          @unique
+  password      String
+  name          String
+  profileImage  String?
+  role          String          @default("CASHIER")
+  branchId      String?
+  companyId     String?
+  isActive      Boolean         @default(false)
+  sessionToken  String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  createdBy     String?
+  deviceActivations DeviceActivation[]
+  card_details      card_details[]
+  receipts          Receipt[]
+  refunds           Refund[]
+  sales             Sale[]
+  subscriptions     subscriptions[]
+  scheduledShifts   ScheduledShiftUser[]
+  branch            Branch?         @relation(fields: [branchId], references: [id])
+  company           Company?        @relation(fields: [companyId], references: [id])
+
+  @@map("users")
+}
+
+model Employee {
+  id                       String         @id @default(cuid())
+  employeeId               String         @unique
+  name                     String
+  email                    String         @unique
+  phone                    String?
+  address                  String?
+  position                 String
+  department               String?
+  salary                   Float?
+  hireDate                 DateTime
+  status                   String         @default("ACTIVE")
+  branchId                 String
+  companyId                String
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  isActive                 Boolean        @default(true)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  attendance               Attendance[]
+  commissions              Commission[]
+  branch                   Branch         @relation(fields: [branchId], references: [id])
+  company                  Company        @relation(fields: [companyId], references: [id])
+  shifts                   Shift[]
+
+  @@map("employees")
+}
+
+model Company {
+  id           String       @id @default(cuid())
+  name         String       @unique
+  description  String?
+  address      String?
+  phone        String?
+  email        String?
+  website      String?
+  businessType String?
+  createdBy    String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deviceActivations DeviceActivation[]
+  branches     Branch[]
+  users        User[]
+  employees    Employee[]
+  products     Product[]
+  customers    Customer[]
+  sales        Sale[]
+  batches      Batch[]
+  purchases    Purchase[]
+  categories   Category[]
+
+  @@map("companies")
+}
+
+model Branch {
+  id          String       @id @default(cuid())
+  name        String
+  address     String
+  phone       String
+  email       String
+  companyId   String
+  managerId   String?
+  createdBy   String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deviceActivations DeviceActivation[]
+  attendance      Attendance[]
+  commissions     Commission[]
+  customers       Customer[]
+  employees       Employee[]
+  products        Product[]
+  receipts        Receipt[]
+  sales           Sale[]
+  shifts          Shift[]
+  scheduledShifts ScheduledShift[]
+  users           User[]
+  batches         Batch[]
+  purchases       Purchase[]
+  categories      Category[]
+  manufacturers   Manufacturer[]
+  suppliers       Supplier[]
+  shelves         Shelf[]
+  company         Company      @relation(fields: [companyId], references: [id])
+
+  @@unique([name, companyId], name: "branch_name_per_company")
+  @@map("branches")
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  type        String        @default("GENERAL")
+  color       String?       @default("#3B82F6")
+  branchId    String?
+  companyId   String?
+  createdBy   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  branch      Branch?       @relation(fields: [branchId], references: [id])
+  company     Company?       @relation(fields: [companyId], references: [id])
+  products    Product[]
+
+  @@unique([name, branchId], name: "category_name_per_branch")
+  @@map("categories")
+}
+
+model Manufacturer {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  website     String?
+  country     String?
+  branchId    String?
+  companyId   String?
+  createdBy   String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  suppliers   Supplier[]
+
+  @@unique([name, branchId], name: "manufacturer_name_per_branch")
+  @@map("manufacturers")
+}
+
+model Supplier {
+  id              String        @id @default(cuid())
+  name            String
+  contactPerson   String
+  phone           String
+  manufacturerId  String?
+  branchId        String?
+  companyId       String?
+  createdBy       String?
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  branch          Branch?       @relation(fields: [branchId], references: [id])
+  manufacturer    Manufacturer? @relation(fields: [manufacturerId], references: [id])
+  products        Product[]
+  batches         Batch[]
+  purchases       Purchase[]
+
+  @@unique([name, branchId], name: "supplier_name_per_branch")
+  @@map("suppliers")
+}
+
+model Shelf {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  location    String?
+  branchId    String?
+  companyId   String?
+  createdBy   String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  batches     Batch[]
+
+  @@unique([name, branchId], name: "shelf_name_per_branch")
+  @@map("shelves")
+}
+
+model Product {
+  id                   String          @id @default(cuid())
+  name                 String
+  description          String?
+  formula              String?         // New field for product composition
+  sku                  String          @unique
+  categoryId           String
+  supplierId           String?         // Optional - supplier is assigned to batches, not products
+  branchId             String
+  companyId            String
+  createdBy            String?
+  minStock             Int             @default(10)
+  maxStock             Int?
+  unitsPerPack         Int             @default(1)
+  barcode              String?         @unique
+  requiresPrescription Boolean         @default(false)
+  isActive             Boolean         @default(true)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  expiryDate           DateTime?
+  branch               Branch          @relation(fields: [branchId], references: [id])
+  company              Company         @relation(fields: [companyId], references: [id])
+  category             Category        @relation(fields: [categoryId], references: [id])
+  supplier             Supplier?       @relation(fields: [supplierId], references: [id])
+  refundItems          RefundItem[]
+  saleItems            SaleItem[]
+  stockMovements       StockMovement[]
+  batches              Batch[]
+  purchaseItems        PurchaseItem[]
+
+  @@map("products")
+}
+
+model Batch {
+  id                    String    @id @default(cuid())
+  batchNo              String
+  productId            String
+  branchId             String
+  companyId            String
+  supplierId           String?
+  supplierName         String?
+  barcode              String?
+  totalBoxes           Int        @default(0)
+  unitsPerBox          Int        @default(0)
+  quantity             Int        @default(0)  // Current available quantity
+  purchasePrice        Float      // Price per unit when purchased
+  sellingPrice         Float      // Price per unit when sold
+  stockPurchasePrice   Float      @default(0)
+  paidAmount           Float      @default(0)
+  supplierOutstanding  Float      @default(0)
+  supplierInvoiceNo    String?
+  purchasingMethod     String?
+  expireDate           DateTime?
+  productionDate       DateTime?
+  shelfId              String?
+  shelfName            String?
+  isActive             Boolean    @default(true)
+  isReported           Boolean    @default(false)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  createdBy            String?
+  product              Product    @relation(fields: [productId], references: [id])
+  branch               Branch     @relation(fields: [branchId], references: [id])
+  company              Company    @relation(fields: [companyId], references: [id])
+  shelf                Shelf?     @relation(fields: [shelfId], references: [id])
+  supplier             Supplier?  @relation(fields: [supplierId], references: [id])
+  purchaseItems        PurchaseItem[]
+  saleItems            SaleItem[]
+
+  @@unique([batchNo, productId, branchId])
+  @@map("batches")
+}
+
+model Purchase {
+  id              String          @id @default(cuid())
+  supplierId      String
+  branchId        String
+  companyId       String
+  invoiceNo       String?
+  purchaseDate    DateTime        @default(now())
+  totalAmount     Float           @default(0)
+  paidAmount      Float           @default(0)
+  outstanding     Float           @default(0)
+  status          String          @default("PENDING")
+  notes           String?
+  createdBy       String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  supplier        Supplier        @relation(fields: [supplierId], references: [id])
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  company         Company         @relation(fields: [companyId], references: [id])
+  purchaseItems   PurchaseItem[]
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  productId   String
+  batchId     String?
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  purchase    Purchase @relation(fields: [purchaseId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+  batch       Batch?   @relation(fields: [batchId], references: [id])
+
+  @@map("purchase_items")
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  type      String
+  quantity  Int
+  reason    String?
+  reference String?
+  createdAt DateTime          @default(now())
+  createdBy String?
+  product   Product           @relation(fields: [productId], references: [id])
+
+  @@map("stock_movements")
+}
+
+model Customer {
+  id             String    @id @default(cuid())
+  name           String
+  phone          String    @unique
+  email          String?
+  address        String?
+  branchId       String
+  companyId      String
+  createdBy      String?
+  totalPurchases Float     @default(0)
+  loyaltyPoints  Int       @default(0)
+  isVIP          Boolean   @default(false)
+  lastVisit      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  branch         Branch    @relation(fields: [branchId], references: [id])
+  company        Company   @relation(fields: [companyId], references: [id])
+  sales          Sale[]
+
+  @@map("customers")
+}
+
+model Sale {
+  id                 String        @id @default(cuid())
+  customerId         String?
+  userId             String
+  branchId           String
+  companyId          String
+  createdBy          String?
+  subtotal           Float
+  taxAmount          Float
+  discountAmount     Float         @default(0)
+  discountPercentage Float?        @default(0)
+  totalAmount        Float
+  paymentMethod      String
+  paymentStatus      String        @default("PENDING")
+  status             String       @default("COMPLETED")
+  saleDate           DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  receipts           Receipt[]
+  refunds            Refund[]      @relation("SaleRefunds")
+  items              SaleItem[]
+  branch             Branch        @relation(fields: [branchId], references: [id])
+  company            Company       @relation(fields: [companyId], references: [id])
+  customer           Customer?     @relation(fields: [customerId], references: [id])
+  user               User          @relation(fields: [userId], references: [id])
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String    @id @default(cuid())
+  saleId      String
+  productId   String
+  batchId     String?   // Link to specific batch
+  createdBy   String?
+  quantity    Int
+  unitPrice   Float
+  totalPrice  Float
+  batchNumber String?   // Keep for backward compatibility
+  expiryDate  DateTime?
+  product     Product   @relation(fields: [productId], references: [id])
+  batch       Batch?    @relation(fields: [batchId], references: [id])
+  sale        Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@map("sale_items")
+}
+
+model Receipt {
+  id            String   @id @default(cuid())
+  saleId        String
+  userId        String
+  branchId      String
+  createdBy     String?
+  receiptNumber String   @unique
+  printedAt     DateTime @default(now())
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  sale          Sale     @relation(fields: [saleId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@map("receipts")
+}
+
+model Refund {
+  id             String        @id @default(cuid())
+  originalSaleId String
+  refundReason   String
+  refundAmount   Float
+  refundedBy     String
+  createdBy      String?
+  status         String        @default("PENDING")
+  processedAt    DateTime?
+  createdAt      DateTime?     @default(now())
+  updatedAt      DateTime?     @default(now()) @updatedAt
+  items          RefundItem[]
+  originalSale   Sale          @relation("SaleRefunds", fields: [originalSaleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refundedByUser User          @relation(fields: [refundedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("refunds")
+}
+
+model RefundItem {
+  id        String  @id @default(cuid())
+  refundId  String
+  productId String
+  createdBy String?
+  quantity  Int
+  unitPrice Float
+  reason    String
+  product   Product @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  refund    Refund  @relation(fields: [refundId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("refund_items")
+}
+
+model Attendance {
+  id         String           @id @default(cuid())
+  employeeId String
+  branchId   String
+  checkIn    DateTime
+  checkOut   DateTime?
+  totalHours Float?
+  status     String           @default("PRESENT")
+  notes      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  branch     Branch           @relation(fields: [branchId], references: [id])
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+
+  @@map("attendance")
+}
+
+model Shift {
+  id              String      @id @default(cuid())
+  employeeId      String
+  branchId        String
+  shiftDate       DateTime
+  startTime       DateTime
+  endTime         DateTime?
+  openingBalance  Float       @default(0)
+  cashIn          Float       @default(0)
+  cashOut         Float       @default(0)
+  expectedBalance Float?
+  actualBalance   Float?
+  difference      Float?
+  status          String      @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  branch          Branch      @relation(fields: [branchId], references: [id])
+  employee        Employee    @relation(fields: [employeeId], references: [id])
+
+  @@map("shifts")
+}
+
+model Commission {
+  id                String           @id @default(cuid())
+  employeeId        String
+  branchId          String
+  period            String
+  periodType        String           @default("MONTHLY")
+  totalSales        Float            @default(0)
+  totalTransactions Int              @default(0)
+  averageSale       Float            @default(0)
+  baseRate          Float            @default(0.02)
+  bonusRate         Float            @default(0)
+  totalCommission   Float            @default(0)
+  bonusAmount       Float            @default(0)
+  totalAmount       Float            @default(0)
+  status            String           @default("PENDING")
+  paidAt            DateTime?
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  branch            Branch           @relation(fields: [branchId], references: [id])
+  employee          Employee         @relation(fields: [employeeId], references: [id])
+
+  @@map("commissions")
+}
+
+model card_details {
+  id          String   @id
+  userId      String
+  last4       String
+  brand       String
+  expiryMonth Int
+  expiryYear  Int
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  users       User     @relation(fields: [userId], references: [id])
+}
+
+model subscriptions {
+  id              String             @id
+  userId          String
+  planName        String
+  status          String             @default("PENDING")
+  startDate       DateTime
+  endDate         DateTime
+  amount          Float
+  currency        String             @default("USD")
+  autoRenew       Boolean            @default(true)
+  nextBillingDate DateTime
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime
+  users           User               @relation(fields: [userId], references: [id])
+}
+
+model Settings {
+  id          String   @id @default(cuid())
+  createdBy   String
+  key         String
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([createdBy, key], name: "createdBy_key")
+  @@map("settings")
+}
+
+model ScheduledShift {
+  id              String                @id @default(cuid())
+  name            String
+  startTime       String                // Time in HH:MM format
+  endTime         String                // Time in HH:MM format
+  date            DateTime              // Date of the shift
+  branchId        String
+  maxUsers        Int                   @default(1)
+  status          String                @default("SCHEDULED")
+  notes           String?
+  assignedUsers   ScheduledShiftUser[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  branch          Branch                @relation(fields: [branchId], references: [id])
+
+  @@map("scheduled_shifts")
+}
+
+model ScheduledShiftUser {
+  id                String         @id @default(cuid())
+  scheduledShiftId  String
+  userId            String
+  assignedAt        DateTime       @default(now())
+  assignedBy        String?
+  scheduledShift    ScheduledShift @relation(fields: [scheduledShiftId], references: [id], onDelete: Cascade)
+  user              User           @relation(fields: [userId], references: [id])
+
+  @@unique([scheduledShiftId, userId], name: "unique_shift_user")
+  @@map("scheduled_shift_users")
+}
+
+// Enums removed - SQLite doesn't support enums, using String instead
+// All enum values are now stored as strings in the database
+
+model DeviceActivation {
+  id                    String    @id @default(cuid())
+  deviceId              String    @unique
+  fingerprint           String
+  status                String    @default("PENDING") // PENDING, ACTIVE, INACTIVE
+  licenseKey            String?
+  userId                String?
+  companyId             String?
+  branchId              String?
+  platform              String?
+  hostname              String?
+  macAddress            String?
+  notes                 String?
+  offlineAccessExpiresAt DateTime?
+  activatedBy           String?
+  activatedAt           DateTime?
+  lastVerifiedAt        DateTime?
+  lastVerifiedStatus    String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user                  User?     @relation(fields: [userId], references: [id])
+  company               Company?  @relation(fields: [companyId], references: [id])
+  branch                Branch?   @relation(fields: [branchId], references: [id])
+
+  @@map("device_activations")
+}
