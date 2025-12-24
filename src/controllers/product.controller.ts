@@ -2,12 +2,13 @@
 
 
 import { Request, Response } from 'express';
-import { getPrisma } from '../utils/db.util';
+import { getPrisma, isPostgreSQL } from '../utils/db.util';
 import { CreateProductData, UpdateProductData, StockMovementData } from '../models/product.model';
 import { validate } from '../middleware/validation.middleware';
 import { AuthRequest, buildAdminWhereClause, buildBranchWhereClause } from '../middleware/auth.middleware';
 import { notifyProductChange, notifyInventoryChange } from '../routes/sse.routes';
 import { syncAfterOperation, pullLatestFromLive } from '../utils/sync-helper';
+import { createSearchConditions, serializeBigInt as serializeBigIntHelper } from '../utils/query-helper';
 import Joi from 'joi';
 
 // Utility function to convert BigInt and Date values to strings for JSON serialization
@@ -132,12 +133,14 @@ export const getProducts = async (req: AuthRequest, res: Response) => {
     }
 
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { barcode: { contains: search } },
-        { description: { contains: search } },
-        { formula: { contains: search } } // Search by formula/composition
-      ];
+      // Use database-agnostic search helper for case-insensitive search
+      const searchConditions = createSearchConditions(
+        ['name', 'barcode', 'description', 'formula'],
+        search as string
+      );
+      if (searchConditions.OR) {
+        where.OR = searchConditions.OR;
+      }
     }
 
     // Note: lowStock filtering will be handled after fetching products with batch data

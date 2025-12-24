@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getPrisma } from '../utils/db.util';
+import { createSearchConditions } from '../utils/query-helper';
 import { syncAfterOperation, pullLatestFromLive } from '../utils/sync-helper';
 import Joi from 'joi';
 
@@ -399,13 +400,21 @@ export const getBatches = async (req: any, res: Response) => {
     // }
 
     if (search) {
-      where.OR = [
-        { batchNo: { contains: search } },
-        { supplierName: { contains: search } },
-        { supplierInvoiceNo: { contains: search } },
-        { product: { name: { contains: search } } },
-        { product: { formula: { contains: search } } } // Search by product formula
-      ];
+      // For nested product search, we need to handle it differently
+      const searchTerm = search as string;
+      const searchConditions = createSearchConditions(
+        ['batchNo', 'supplierName', 'supplierInvoiceNo'],
+        searchTerm
+      );
+
+      // Add product name and formula search
+      if (searchConditions.OR) {
+        searchConditions.OR.push(
+          { product: { name: { contains: searchTerm } } },
+          { product: { formula: { contains: searchTerm } } }
+        );
+        where.OR = searchConditions.OR;
+      }
     }
 
     if (isActive !== undefined) {

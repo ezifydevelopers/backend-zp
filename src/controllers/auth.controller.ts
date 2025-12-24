@@ -134,7 +134,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     // Generate JWT token with session token included
     if (!process.env.JWT_SECRET) {
-      throw new Error('JWT_SECRET is not defined');
+      console.error('❌ JWT_SECRET is not defined in environment variables');
+      throw new Error('JWT_SECRET is not defined. Please set JWT_SECRET in your .env file or environment variables.');
     }
 
     const token = (jwt.sign as any)(

@@ -10,6 +10,21 @@ import { getDatabaseService } from '../services/database.service';
 let cachedClient: PrismaClient | null = null;
 
 /**
+ * Check if we're using SQLite
+ */
+export function isSQLite(): boolean {
+  const dbUrl = process.env.DATABASE_URL || '';
+  return dbUrl.startsWith('file:');
+}
+
+/**
+ * Check if we're using PostgreSQL
+ */
+export function isPostgreSQL(): boolean {
+  return !isSQLite();
+}
+
+/**
  * Get Prisma client
  */
 export async function getPrisma(): Promise<PrismaClient> {

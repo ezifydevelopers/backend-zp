@@ -4,6 +4,7 @@ import { getPrisma } from '../utils/db.util';
 import { CreateUserData, UpdateUserData } from '../models/user.model';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { syncAfterOperation, pullLatestFromLive } from '../utils/sync-helper';
+import { createSearchConditions } from '../utils/query-helper';
 import Joi from 'joi';
 
 // Validation schemas
@@ -82,22 +83,32 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     } else if (req.user?.role === 'ADMIN') {
       // CRITICAL FIX: Admin users - ALWAYS show users created by this admin
       // This is the most important filter - newly created users MUST be visible
+      // Use the admin's own ID as createdBy (self-referencing for top-level admins)
       const adminCreatedBy = req.user?.createdBy || req.user?.id;
+      const adminUserId = req.user?.id;
 
       console.log('🏢 Admin user context:', {
-        userId: req.user?.id,
+        userId: adminUserId,
         createdBy: adminCreatedBy,
         selectedBranchId,
         selectedCompanyId,
         queryBranchId: branchId
       });
 
-      // Build OR conditions: always include createdBy, optionally include branch/company
+      // CRITICAL: For ADMIN, show users where createdBy matches admin's ID or createdBy
+      // This ensures newly created users are always visible
       const orConditions: any[] = [
-        { createdBy: adminCreatedBy } // This MUST always be in the OR
+        { createdBy: adminCreatedBy }, // Users created by this admin's createdBy chain
+        { createdBy: adminUserId }     // Users created directly by this admin
       ];
 
-      // Add branch/company conditions as additional OR options
+      // Remove duplicates
+      const uniqueCreatedBy = [...new Set([adminCreatedBy, adminUserId])];
+      if (uniqueCreatedBy.length === 1) {
+        orConditions.pop(); // Remove duplicate if same
+      }
+
+      // Add branch/company conditions as additional OR options (optional)
       if (selectedBranchId && selectedBranchId.trim() !== '') {
         orConditions.push({ branchId: selectedBranchId });
         console.log('🏢 Admin: OR query - (branchId OR createdBy)');
@@ -122,18 +133,19 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     // Build additional filters that will be combined with AND
     const additionalFilters: any[] = [];
 
-    // Handle isActive filter
+    // CRITICAL FIX: Show ALL users by default (both active and inactive)
+    // This ensures newly created staff (isActive = false) are visible immediately
+    // SuperAdmin can see all users and activate them as needed
     const isActiveStr = String(isActive);
-    if (isActiveStr === 'all') {
-      // Show all users regardless of isActive - don't add filter
-    } else if (isActiveStr === 'false') {
-      // Show only inactive users
+    if (isActiveStr === 'true' || isActiveStr === '1') {
+      // Show only active users (if explicitly requested)
+      additionalFilters.push({ isActive: true });
+    } else if (isActiveStr === 'false' || isActiveStr === '0') {
+      // Show only inactive users (if explicitly requested)
       additionalFilters.push({ isActive: false });
     } else {
-      // Default: show active users (isActive = true)
-      // Note: Since isActive has a default value of false in the schema,
-      // we only need to filter for true. Null values are treated as inactive.
-      additionalFilters.push({ isActive: true });
+      // Default: Show ALL users (both active and inactive) - don't add filter
+      // This ensures newly created staff are visible immediately
     }
 
     // Handle role filter
@@ -158,28 +170,34 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
 
     // Handle search
     if (search && typeof search === 'string' && search.trim() !== '') {
-      additionalFilters.push({
-        OR: [
-          { name: { contains: search } },
-          { username: { contains: search } },
-          { email: { contains: search } }
-        ]
-      });
+      const searchConditions = createSearchConditions(
+        ['name', 'username', 'email'],
+        search
+      );
+      if (searchConditions.OR) {
+        additionalFilters.push({ OR: searchConditions.OR });
+      }
     }
 
     // Combine base filters (OR clause) with additional filters (AND)
+    // CRITICAL FIX: For SQLite compatibility, ensure proper query structure
     if (additionalFilters.length > 0) {
       if (where.OR && Array.isArray(where.OR)) {
         // We have an OR clause (from ADMIN role), combine with AND
+        // This structure works for both SQLite and PostgreSQL
         where.AND = [
           { OR: where.OR },
           ...additionalFilters
         ];
         delete where.OR;
+        console.log('🔍 Combined OR with AND filters:', JSON.stringify(where, null, 2));
       } else {
         // No OR clause, just add additional filters directly
         Object.assign(where, ...additionalFilters);
       }
+    } else if (where.OR && Array.isArray(where.OR)) {
+      // Keep OR clause as-is if no additional filters
+      console.log('🔍 Using OR clause only:', JSON.stringify(where, null, 2));
     }
 
     // Debug: Log final where clause
@@ -203,9 +221,24 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
         createdBy: true,
         isActive: true
       },
-      take: 20
+      take: 50 // Increased to see more users
     });
     console.log('🔍 DEBUG - All users in database:', JSON.stringify(allUsersDebug, null, 2));
+    console.log('🔍 DEBUG - Total users found:', allUsersDebug.length);
+
+    // Also check users matching the admin's createdBy
+    if (req.user?.role === 'ADMIN') {
+      const adminCreatedBy = req.user?.createdBy || req.user?.id;
+      const adminUserId = req.user?.id;
+      const adminUsers = allUsersDebug.filter(u =>
+        u.createdBy === adminCreatedBy || u.createdBy === adminUserId
+      );
+      console.log('🔍 DEBUG - Users matching admin createdBy:', JSON.stringify(adminUsers, null, 2));
+      console.log('🔍 DEBUG - Admin createdBy value:', adminCreatedBy);
+      console.log('🔍 DEBUG - Admin user ID:', adminUserId);
+      console.log('🔍 DEBUG - Users with createdBy = adminCreatedBy:', allUsersDebug.filter(u => u.createdBy === adminCreatedBy).length);
+      console.log('🔍 DEBUG - Users with createdBy = adminUserId:', allUsersDebug.filter(u => u.createdBy === adminUserId).length);
+    }
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -394,9 +427,10 @@ export const createUser = async (req: AuthRequest, res: Response) => {
     const currentUserCompanyId = req.user?.companyId;
 
     // For data isolation: createdBy should be the admin who created this user
-    // If current user is an ADMIN with no createdBy (self-created), use their own ID
-    // Otherwise, use the createdBy chain
-    const createdByValue = currentUserAdminId || currentUserId;
+    // CRITICAL FIX: Always use the current user's ID as createdBy
+    // This ensures the user will appear in queries that check for createdBy = adminUserId
+    // The query checks for both adminCreatedBy OR adminUserId, so using adminUserId ensures visibility
+    const createdByValue = currentUserId; // Always use current user's ID to ensure visibility
 
     // Get companyId from branch if not set on current user
     let companyIdValue = currentUserCompanyId;
@@ -434,7 +468,7 @@ export const createUser = async (req: AuthRequest, res: Response) => {
           branchId: branchIdValue,
           companyId: companyIdValue, // Set companyId for data isolation
           createdBy: createdByValue, // Set createdBy for data isolation
-          isActive: true // New users are active by default when created by admin
+          isActive: false // CRITICAL FIX: New users are INACTIVE by default - SuperAdmin must activate
         },
         include: {
           branch: {
