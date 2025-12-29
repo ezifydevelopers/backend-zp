@@ -747,3 +747,66 @@ export const checkAccountStatus = async (req: Request, res: Response): Promise<v
     });
   }
 };
+
+/**
+ * Check if user exists in local database (for offline-first authentication)
+ * This endpoint is used to determine if internet is required for login
+ */
+export const checkLocalUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { usernameOrEmail } = req.body;
+
+    if (!usernameOrEmail) {
+      res.status(400).json({
+        success: false,
+        message: 'Username or email is required'
+      });
+      return;
+    }
+
+    // Get database client (works with SQLite or PostgreSQL)
+    const prisma = await getPrisma();
+
+    // Check if user exists in local database
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: usernameOrEmail },
+          { email: usernameOrEmail }
+        ]
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        isActive: true
+      }
+    });
+
+    if (user) {
+      res.json({
+        success: true,
+        exists: true,
+        isActive: user.isActive,
+        message: user.isActive 
+          ? 'User exists and is approved. You can login offline.' 
+          : 'User exists but is pending approval. Internet required for activation check.'
+      });
+    } else {
+      res.json({
+        success: true,
+        exists: false,
+        isActive: false,
+        message: 'User not found in local database. Internet required for first-time sign-in.'
+      });
+    }
+  } catch (error) {
+    console.error('Check local user error:', error);
+    res.status(500).json({
+      success: false,
+      exists: false,
+      isActive: false,
+      message: 'Error checking local user'
+    });
+  }
+};
