@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { getPrisma } from '../utils/db.util';
-import { createSearchConditions } from '../utils/query-helper';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { syncAfterOperation, pullLatestFromLive } from '../utils/sync-helper';
 import Joi from 'joi';
@@ -81,13 +80,13 @@ export const getSuppliers = async (req: AuthRequest, res: Response) => {
     }
 
     if (search) {
-      const searchConditions = createSearchConditions(
-        ['name', 'contactPerson', 'phone', 'email', 'address'],
-        search as string
-      );
-      if (searchConditions.OR) {
-        where.OR = searchConditions.OR;
-      }
+      where.OR = [
+        { name: { contains: search } },
+        { contactPerson: { contains: search } },
+        { phone: { contains: search } },
+        { email: { contains: search } },
+        { address: { contains: search } }
+      ];
     }
 
     const [suppliers, total] = await Promise.all([

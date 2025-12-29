@@ -17,29 +17,6 @@ if (!process.env.DATABASE_URL) {
 
 console.log('[Server] ✅ Database mode:', process.env.USE_POSTGRESQL === 'true' ? 'PostgreSQL (Web)' : 'SQLite (Electron)');
 
-// Ensure JWT_SECRET is set (required for authentication)
-if (!process.env.JWT_SECRET) {
-  console.warn('⚠️ JWT_SECRET is not set in environment variables');
-  console.warn('⚠️ Attempting to load from .env file...');
-  // Try to load from .env file if not set
-  try {
-    const dotenv = require('dotenv');
-    dotenv.config();
-    if (!process.env.JWT_SECRET) {
-      console.error('❌ JWT_SECRET is still not set after loading .env file');
-      console.error('❌ Please set JWT_SECRET in your .env file');
-      throw new Error('JWT_SECRET is required but not set. Please add JWT_SECRET to your .env file.');
-    } else {
-      console.log('✅ JWT_SECRET loaded from .env file');
-    }
-  } catch (err) {
-    console.error('❌ Failed to load JWT_SECRET:', err);
-    throw new Error('JWT_SECRET is required but could not be loaded. Please set JWT_SECRET in your .env file or environment variables.');
-  }
-} else {
-  console.log('[Server] ✅ JWT_SECRET is set');
-}
-
 // Now import Prisma and other modules AFTER DATABASE_URL is set
 import express from 'express';
 import cors from 'cors';

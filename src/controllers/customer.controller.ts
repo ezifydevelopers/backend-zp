@@ -3,7 +3,6 @@
 
 import { Request, Response } from 'express';
 import { getPrisma } from '../utils/db.util';
-import { createSearchConditions } from '../utils/query-helper';
 import { CreateCustomerData, UpdateCustomerData } from '../models/customer.model';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { notifyCustomerChange } from '../routes/sse.routes';
@@ -90,14 +89,13 @@ export const getCustomers = async (req: AuthRequest, res: Response) => {
     }
 
     if (search) {
-      // Use database-agnostic search helper for case-insensitive search
-      const searchConditions = createSearchConditions(
-        ['name', 'phone', 'email'],
-        search as string
-      );
-      if (searchConditions.OR) {
-        where.OR = searchConditions.OR;
-      }
+      // SQLite doesn't support  so we'll search case-insensitively by converting to lowercase
+      const searchLower = (search as string).toLowerCase();
+      where.OR = [
+        { name: { contains: search as string } },
+        { phone: { contains: search as string } },
+        { email: { contains: search as string } }
+      ];
     }
 
     // Filter by creator role if specified

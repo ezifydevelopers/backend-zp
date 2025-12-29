@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
 import { getPrisma } from '../utils/db.util';
-import { createSearchConditions } from '../utils/query-helper';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { syncAfterOperation, pullLatestFromLive } from '../utils/sync-helper';
 import Joi from 'joi';
@@ -147,25 +146,31 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 
     // Add search conditions to finalWhere
     if (search) {
-      const searchConditions = createSearchConditions(
-        ['name', 'description'],
-        search as string
-      );
-
-      if (searchConditions.OR) {
-        if (finalWhere.AND) {
-          finalWhere.AND.push({ OR: searchConditions.OR });
-        } else if (finalWhere.OR) {
-          // If OR exists (from branch conditions), wrap everything in AND
-          finalWhere = {
-            AND: [
-              { OR: finalWhere.OR },
-              { OR: searchConditions.OR }
-            ]
-          };
-        } else {
-          finalWhere.OR = searchConditions.OR;
-        }
+      if (finalWhere.AND) {
+        finalWhere.AND.push({
+          OR: [
+            { name: { contains: search } },
+            { description: { contains: search } }
+          ]
+        });
+      } else if (finalWhere.OR) {
+        // If OR exists (from branch conditions), wrap everything in AND
+        finalWhere = {
+          AND: [
+            { OR: finalWhere.OR },
+            {
+              OR: [
+                { name: { contains: search } },
+                { description: { contains: search } }
+              ]
+            }
+          ]
+        };
+      } else {
+        finalWhere.OR = [
+          { name: { contains: search } },
+          { description: { contains: search } }
+        ];
       }
     }
 
